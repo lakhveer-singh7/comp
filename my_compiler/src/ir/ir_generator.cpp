@@ -370,10 +370,19 @@ void IRGenerator::emitStmt(const Stmt* s, FunctionContext& fn) {
                 fn.body << "  store i32 " << val.reg << ", i32* " << a.reg << "\n";
             }
         } else {
-            std::string a = ensureAlloca(vd->name, fn);
-            if (vd->init) {
-                IRValue val = emitExpr(vd->init.get(), fn);
-                fn.body << "  store i32 " << val.reg << ", i32* " << a << "\n";
+            if (vd->type && vd->type->kind == TypeKind::Array) {
+                // allocate array
+                size_t n = vd->type->arrayLength;
+                std::string a = newTemp(fn);
+                fn.entryAllocas.push_back("  " + a + " = alloca [" + std::to_string(n) + " x i32]\n");
+                fn.locals[vd->name] = a;
+                fn.localArrayLen[vd->name] = n;
+            } else {
+                std::string a = ensureAlloca(vd->name, fn);
+                if (vd->init) {
+                    IRValue val = emitExpr(vd->init.get(), fn);
+                    fn.body << "  store i32 " << val.reg << ", i32* " << a << "\n";
+                }
             }
         }
         return;

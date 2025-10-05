@@ -27,6 +27,7 @@ private:
         bool currentTerminated = false;
         std::vector<LoopTargets> loopStack;
         std::unordered_map<std::string, std::string> labelMap; // user label -> llvm label
+        std::unordered_map<std::string, size_t> localArrayLen; // local arrays length by name
     };
 
     // Module-level globals for string literals

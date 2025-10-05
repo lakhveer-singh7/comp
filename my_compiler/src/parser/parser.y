@@ -39,7 +39,7 @@ std::unique_ptr<Function> g_resultFunction;
 %left '+' '-'
 %left '*' '/' '%'
 %right UMINUS '!' '~'
-%type <expr> expr assignment logical_or logical_and equality relational additive multiplicative unary postfix primary opt_expr
+%type <expr> expr assignment logical_or logical_and bitwise_or bitwise_xor bitwise_and equality relational shift additive multiplicative unary postfix primary opt_expr
 %type <stmt> stmt expr_stmt selection_stmt iteration_stmt jump_stmt compound_stmt declaration label_stmt switch_stmt
 %type <args> arg_list
 %type <slist> stmt_list default_block_opt
@@ -171,6 +171,14 @@ declaration
     {
       auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::Int(); d->init.reset($4); $$ = d;
     }
+  | T_CHAR T_ID ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::Char(); $$ = d;
+    }
+  | T_INT T_ID '[' T_NUM ']' ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::ArrayOf(Type::Int(), (size_t)$4); $$ = d;
+    }
   ;
 
 switch_stmt
@@ -229,8 +237,23 @@ logical_or
   ;
 
 logical_and
-  : logical_and T_AND equality  { $$ = new BinaryExpr("&&", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
-  | equality                    { $$ = $1; }
+  : logical_and T_AND bitwise_or  { $$ = new BinaryExpr("&&", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | bitwise_or                    { $$ = $1; }
+  ;
+
+bitwise_or
+  : bitwise_or '|' bitwise_xor { $$ = new BinaryExpr("|", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | bitwise_xor                { $$ = $1; }
+  ;
+
+bitwise_xor
+  : bitwise_xor '^' bitwise_and { $$ = new BinaryExpr("^", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | bitwise_and                 { $$ = $1; }
+  ;
+
+bitwise_and
+  : bitwise_and '&' equality { $$ = new BinaryExpr("&", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | equality                 { $$ = $1; }
   ;
 
 equality
@@ -240,11 +263,17 @@ equality
   ;
 
 relational
-  : relational '<' additive    { $$ = new BinaryExpr("<", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
-  | relational '>' additive    { $$ = new BinaryExpr(">", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
-  | relational T_LE additive   { $$ = new BinaryExpr("<=", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
-  | relational T_GE additive   { $$ = new BinaryExpr(">=", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
-  | additive                   { $$ = $1; }
+  : relational '<' shift    { $$ = new BinaryExpr("<", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | relational '>' shift    { $$ = new BinaryExpr(">", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | relational T_LE shift   { $$ = new BinaryExpr("<=", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | relational T_GE shift   { $$ = new BinaryExpr(">=", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | shift                   { $$ = $1; }
+  ;
+
+shift
+  : shift T_SHL additive { $$ = new BinaryExpr("<<", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | shift T_SHR additive { $$ = new BinaryExpr(">>", std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | additive             { $$ = $1; }
   ;
 
 additive
@@ -263,6 +292,8 @@ multiplicative
 unary
   : '-' unary %prec UMINUS   { $$ = new UnaryExpr("-", std::unique_ptr<Expr>($2)); }
   | '!' unary                { $$ = new UnaryExpr("!", std::unique_ptr<Expr>($2)); }
+  | '&' unary                { $$ = new UnaryExpr("&", std::unique_ptr<Expr>($2)); }
+  | '*' unary                { $$ = new UnaryExpr("*", std::unique_ptr<Expr>($2)); }
   | postfix                  { $$ = $1; }
   ;
 
