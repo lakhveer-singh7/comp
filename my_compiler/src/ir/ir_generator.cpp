@@ -395,14 +395,18 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
                 return IRValue{"0","i32"};
             }
             // Known function definitions or externs
-            auto sigIt = funcDecls.find(name);
-            if (sigIt != funcDecls.end()) {
-                IRValue out; out.type = "i32"; out.reg = newTemp(fn);
-                fn.body << "  " << out.reg << " = call i32 @" << name << "(";
+            auto itR = funcRetIR.find(name);
+            if (itR != funcRetIR.end()) {
+                std::string retTy = itR->second;
+                IRValue out; out.type = retTy; out.reg = newTemp(fn);
+                fn.body << "  " << out.reg << " = call " << retTy << " @" << name << "(";
+                const auto& ptys = funcParamIR[name];
                 for (size_t i=0;i<call->args.size();++i) {
                     IRValue ai = emitExpr(call->args[i].get(), fn);
+                    std::string wanted = (i < ptys.size() ? ptys[i] : ai.type);
+                    ai = ensureCast(ai, wanted, fn);
                     if (i) fn.body << ", ";
-                    fn.body << ai.type << " " << ai.reg;
+                    fn.body << wanted << " " << ai.reg;
                 }
                 fn.body << ")\n";
                 usedFunctions.insert(name);
@@ -721,8 +725,12 @@ std::string IRGenerator::generateModuleIR(const std::vector<std::unique_ptr<Func
     mod << "source_filename = \"my_compiler\"\n\n";
 
     // Record function declarations for calls between functions
+    funcParamIR.clear(); funcRetIR.clear();
     for (const auto& fn : fns) {
-        funcDecls[fn->name] = "i32"; // i32(...)
+        std::vector<std::string> params;
+        for (const auto& p : fn->detailedParams) params.push_back(typeToIR(p.type));
+        funcParamIR[fn->name] = std::move(params);
+        funcRetIR[fn->name] = typeToIR(fn->returnType);
     }
 
     // Emit all functions
