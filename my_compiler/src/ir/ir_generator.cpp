@@ -7,6 +7,11 @@ static std::string opToLlvm(const std::string& op) {
     if (op == "*") return "mul";
     if (op == "/") return "sdiv";
     if (op == "%") return "srem";
+    if (op == "&") return "and";
+    if (op == "|") return "or";
+    if (op == "^") return "xor";
+    if (op == "<<") return "shl";
+    if (op == ">>") return "ashr";
     if (op == "<") return "icmp slt";
     if (op == ">") return "icmp sgt";
     if (op == "<=") return "icmp sle";
@@ -91,6 +96,38 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
         std::string a = ensureAlloca(v->name, fn);
         return IRValue{a, "i32*"};
     }
+    if (auto idx = dynamic_cast<const ArrayIndexExpr*>(e)) {
+        // Base can be local array name or a pointer
+        if (auto v = dynamic_cast<VarExpr*>(idx->base.get())) {
+            auto it = fn.localArrayLen.find(v->name);
+            IRValue iv = emitExpr(idx->index.get(), fn);
+            // Cast index to i64
+            IRValue idx64; idx64.type = "i64"; idx64.reg = newTemp(fn);
+            fn.body << "  " << idx64.reg << " = zext i32 " << iv.reg << " to i64\n";
+            if (it != fn.localArrayLen.end()) {
+                // GEP into [N x i32]
+                std::string arr = fn.locals[v->name];
+                IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
+                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds [" << it->second << " x i32], [" << it->second << " x i32]* " << arr << ", i64 0, i64 " << idx64.reg << "\n";
+                return eltPtr;
+            } else {
+                // Treat as pointer i32*
+                IRValue basePtr = emitExpr(idx->base.get(), fn);
+                IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
+                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds i32, i32* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
+                return eltPtr;
+            }
+        } else {
+            // Pointer base
+            IRValue basePtr = emitExpr(idx->base.get(), fn);
+            IRValue iv = emitExpr(idx->index.get(), fn);
+            IRValue idx64; idx64.type = "i64"; idx64.reg = newTemp(fn);
+            fn.body << "  " << idx64.reg << " = zext i32 " << iv.reg << " to i64\n";
+            IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
+            fn.body << "  " << eltPtr.reg << " = getelementptr inbounds i32, i32* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
+            return eltPtr;
+        }
+    }
     assert(false && "unsupported lvalue");
     return IRValue{"", ""};
 }
@@ -158,6 +195,16 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
             IRValue z; z.type = "i32"; z.reg = newTemp(fn);
             fn.body << "  " << z.reg << " = zext i1 " << cmp.reg << " to i32\n";
             return z;
+        }
+        if (un->op == "&") {
+            IRValue addr = lvalueAddress(un->operand.get(), fn);
+            return addr;
+        }
+        if (un->op == "*") {
+            // load i32 from pointer
+            IRValue out; out.type = "i32"; out.reg = newTemp(fn);
+            fn.body << "  " << out.reg << " = load i32, i32* " << v.reg << "\n";
+            return out;
         }
     }
     if (auto asn = dynamic_cast<const AssignExpr*>(e)) {
