@@ -44,6 +44,8 @@ void checkExpr(const Expr* e, Ctx& ctx) {
         checkExpr(m->base.get(), ctx);
     } else if (auto pm = dynamic_cast<const PtrMemberExpr*>(e)) {
         checkExpr(pm->base.get(), ctx);
+    } else if (auto s = dynamic_cast<const StringLiteralExpr*>(e)) {
+        (void)s; // ok
     }
 }
 

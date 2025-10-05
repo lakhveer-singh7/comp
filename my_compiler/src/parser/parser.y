@@ -19,6 +19,7 @@ std::vector<std::unique_ptr<Function>> g_functions;
 // Simple typedef and struct registries for semantic/IR glue
 std::unordered_set<std::string> g_typedef_ints;
 std::unordered_map<std::string, std::vector<std::string>> g_struct_fields;
+std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
 %}
 
 %union {
@@ -31,6 +32,7 @@ std::unordered_map<std::string, std::vector<std::string>> g_struct_fields;
   std::vector<Stmt*>* slist;
   std::vector<SwitchCase>* cases;
   std::vector<FunctionParam>* plist;
+  std::vector<std::pair<std::string,std::string>>* flist;
 }
 
 %token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC
@@ -52,6 +54,7 @@ std::unordered_map<std::string, std::vector<std::string>> g_struct_fields;
 %type <slist> stmt_list default_block_opt
 %type <cases> case_blocks
 %type <plist> param_list param_list_opt
+%type <flist> struct_fields
 
 %%
 translation_unit
@@ -220,14 +223,20 @@ declaration
       g_typedef_ints.insert(std::string($3)); free($3);
       $$ = new ExprStmt(std::unique_ptr<Expr>());
     }
-  | T_STRUCT T_ID '{' stmt_list '}' ';'
+  | T_STRUCT T_ID '{' struct_fields '}' ';'
     {
-      // stmt_list expected to be field decls like 'int a;' which our grammar can't distinguish;
-      // use a placeholder: empty or prior knowledge. We'll just record empty field list.
-      g_struct_fields[std::string($2)] = std::vector<std::string>();
-      free($2);
+      // Register struct fields with types: i32 for int, i8 for char
+      extern std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
+      g_struct_field_types[std::string($2)] = *$4;
+      delete $4; free($2);
       $$ = new ExprStmt(std::unique_ptr<Expr>());
     }
+  ;
+
+struct_fields
+  : struct_fields T_INT T_ID ';' { $1->push_back({std::string($3), std::string("i32")}); free($3); $$ = $1; }
+  | struct_fields T_CHAR T_ID ';' { $1->push_back({std::string($3), std::string("i8")}); free($3); $$ = $1; }
+  | /* empty */ { $$ = new std::vector<std::pair<std::string,std::string>>(); }
   ;
 
 switch_stmt

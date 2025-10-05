@@ -157,8 +157,21 @@ void IRGenerator::ensureStructType(const std::string& name) {
     if (name.empty()) return;
     if (usedStructs.count(name)) return;
     usedStructs.insert(name);
-    // Minimal: opaque with single i32 field. Replace with real layout when semantic info exists.
-    structTypeDefs.push_back("%struct." + name + " = type { i32 }\n");
+    // Query parser-registered struct field types
+    extern std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
+    auto it = g_struct_field_types.find(name);
+    if (it == g_struct_field_types.end() || it->second.empty()) {
+        structTypeDefs.push_back("%struct." + name + " = type { i32 }\n");
+        return;
+    }
+    std::ostringstream ty;
+    ty << "%struct." << name << " = type { ";
+    for (size_t i=0;i<it->second.size();++i) {
+        if (i) ty << ", ";
+        ty << it->second[i].second; // IR type like i32/i8
+    }
+    ty << " }\n";
+    structTypeDefs.push_back(ty.str());
 }
 
 IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
