@@ -1,3 +1,4 @@
+#include "ir_generator.h"
 #include "type_system.h"
 std::string IRGenerator::typeToIR(Type* t) {
     if (!t) return "i32";
@@ -25,7 +26,6 @@ std::string IRGenerator::typeToIR(Type* t) {
     }
     return "i32";
 }
-#include "ir_generator.h"
 #include <cassert>
 
 static std::string opToLlvm(const std::string& op) {
