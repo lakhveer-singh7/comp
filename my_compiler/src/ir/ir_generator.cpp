@@ -47,6 +47,15 @@ static std::string opToLlvm(const std::string& op) {
     return "";
 }
 
+static bool isPointerIR(const std::string& t) {
+    return !t.empty() && t.back() == '*';
+}
+
+static std::string pointeeIR(const std::string& t) {
+    if (isPointerIR(t)) return t.substr(0, t.size()-1);
+    return t;
+}
+
 void IRGenerator::ensureBlock(FunctionContext& fn) {
     if (fn.currentLabel.empty()) {
         fn.currentLabel = "entry";
@@ -262,6 +271,30 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
             fn.body << "  " << z.reg << " = zext i1 " << cmp.reg << " to i32\n";
             return z;
         }
+        // Pointer arithmetic: ptr +/- i32
+        if ((bin->op == "+" || bin->op == "-") && (isPointerIR(l.type) || isPointerIR(r.type))) {
+            IRValue base;
+            IRValue idx;
+            if (isPointerIR(l.type) && r.type == "i32") { base = l; idx = r; }
+            else if (isPointerIR(r.type) && l.type == "i32" && bin->op == "+") { base = r; idx = l; }
+            else {
+                // fallback integer op
+                IRValue out; out.type = "i32"; out.reg = newTemp(fn);
+                fn.body << "  " << out.reg << " = " << op << " i32 " << l.reg << ", " << r.reg << "\n";
+                return out;
+            }
+            if (bin->op == "-") {
+                IRValue neg; neg.type = "i32"; neg.reg = newTemp(fn);
+                fn.body << "  " << neg.reg << " = sub i32 0, " << idx.reg << "\n";
+                idx = neg;
+            }
+            IRValue idx64; idx64.type = "i64"; idx64.reg = newTemp(fn);
+            fn.body << "  " << idx64.reg << " = sext i32 " << idx.reg << " to i64\n";
+            std::string elemTy = pointeeIR(base.type);
+            IRValue outp; outp.type = base.type; outp.reg = newTemp(fn);
+            fn.body << "  " << outp.reg << " = getelementptr inbounds " << elemTy << ", " << elemTy << "* " << base.reg << ", i64 " << idx64.reg << "\n";
+            return outp;
+        }
         IRValue out; out.type = "i32"; out.reg = newTemp(fn);
         fn.body << "  " << out.reg << " = " << op << " i32 " << l.reg << ", " << r.reg << "\n";
         return out;
@@ -301,16 +334,31 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
             return addr;
         }
         if (un->op == "*") {
-            // load i32 from pointer
-            IRValue out; out.type = "i32"; out.reg = newTemp(fn);
-            fn.body << "  " << out.reg << " = load i32, i32* " << v.reg << "\n";
+            // load from pointer
+            std::string elemTy = pointeeIR(v.type);
+            IRValue out; out.type = elemTy; out.reg = newTemp(fn);
+            fn.body << "  " << out.reg << " = load " << elemTy << ", " << elemTy << "* " << v.reg << "\n";
             return out;
         }
     }
     if (auto asn = dynamic_cast<const AssignExpr*>(e)) {
         IRValue addr = lvalueAddress(asn->target.get(), fn);
         IRValue val = emitExpr(asn->value.get(), fn);
-        fn.body << "  store i32 " << val.reg << ", i32* " << addr.reg << "\n";
+        std::string dataTy = pointeeIR(addr.type);
+        std::string vTy = val.type;
+        if (dataTy != vTy) {
+            // simple int widening/narrowing between i8 and i32
+            IRValue casted = val;
+            if (dataTy == "i32" && vTy == "i8") {
+                casted.type = "i32"; casted.reg = newTemp(fn);
+                fn.body << "  " << casted.reg << " = zext i8 " << val.reg << " to i32\n";
+            } else if (dataTy == "i8" && vTy == "i32") {
+                casted.type = "i8"; casted.reg = newTemp(fn);
+                fn.body << "  " << casted.reg << " = trunc i32 " << val.reg << " to i8\n";
+            }
+            val = casted;
+        }
+        fn.body << "  store " << dataTy << " " << val.reg << ", " << dataTy << "* " << addr.reg << "\n";
         return val;
     }
     if (auto call = dynamic_cast<const CallExpr*>(e)) {

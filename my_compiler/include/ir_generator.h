@@ -41,7 +41,9 @@ private:
     std::unordered_map<std::string, std::string> globalVars; // name -> @g
     std::unordered_map<std::string, std::string> globalVarTypes; // name -> IR type (i32/i8)
     std::unordered_map<std::string, std::string> globalStructName; // name -> struct tag
-    std::unordered_map<std::string, std::string> funcDecls;  // name -> signature
+    // Function signatures for inter-proc calls
+    std::unordered_map<std::string, std::vector<std::string>> funcParamIR; // name -> param IR types
+    std::unordered_map<std::string, std::string> funcRetIR;               // name -> return IR type
     bool usedMalloc = false;
     bool usedFree = false;
     std::unordered_set<std::string> usedFunctions;
@@ -69,4 +71,5 @@ private:
     std::string sanitizeGlobal(const std::string& name) { return "@" + name; }
     void ensureStructType(const std::string& name);
     std::string typeToIR(Type* t);
+    IRValue ensureCast(const IRValue& v, const std::string& toType, FunctionContext& fn);
 };
