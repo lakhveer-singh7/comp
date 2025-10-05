@@ -36,6 +36,7 @@ std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>>
 }
 
 %token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC
+%locations
 %token T_RETURN T_IF T_ELSE T_WHILE T_FOR T_DO T_SWITCH T_CASE T_DEFAULT T_BREAK T_CONTINUE T_GOTO
 %token <sval> T_ID
 %token <ival> T_NUM
@@ -92,6 +93,17 @@ param_list
   | param_list ',' T_INT T_ID
     {
       FunctionParam p; p.name = std::string($4); p.type = Type::Int(); free($4);
+      $1->push_back(p); $$ = $1;
+    }
+  | T_CHAR T_ID
+    {
+      $$ = new std::vector<FunctionParam>();
+      FunctionParam p; p.name = std::string($2); p.type = Type::Char(); free($2);
+      $$->push_back(p);
+    }
+  | param_list ',' T_CHAR T_ID
+    {
+      FunctionParam p; p.name = std::string($4); p.type = Type::Char(); free($4);
       $1->push_back(p); $$ = $1;
     }
   ;
@@ -213,6 +225,10 @@ declaration
   | T_INT T_ID '[' T_NUM ']' ';'
     {
       auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::ArrayOf(Type::Int(), (size_t)$4); $$ = d;
+    }
+  | T_CHAR T_ID '[' T_NUM ']' ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::ArrayOf(Type::Char(), (size_t)$4); $$ = d;
     }
   | T_STRUCT T_ID T_ID ';'
     {
@@ -378,5 +394,6 @@ primary
 %%
 
 void yyerror(const char* s) {
-  fprintf(stderr, "parse error: %s\n", s);
+  extern YYLTYPE yylloc;
+  fprintf(stderr, "parse error at %d:%d: %s\n", yylloc.first_line, yylloc.first_column, s);
 }

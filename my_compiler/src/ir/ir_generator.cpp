@@ -519,10 +519,12 @@ void IRGenerator::emitStmt(const Stmt* s, FunctionContext& fn) {
                 // allocate array
                 size_t n = vd->type->arrayLength;
                 std::string a = newTemp(fn);
-                fn.entryAllocas.push_back("  " + a + " = alloca [" + std::to_string(n) + " x i32]\n");
+                std::string elem = (vd->type->element && vd->type->element->kind == TypeKind::Char) ? std::string("i8") : std::string("i32");
+                fn.entryAllocas.push_back("  " + a + " = alloca [" + std::to_string(n) + " x " + elem + "]\n");
                 fn.locals[vd->name] = a;
                 fn.localArrayLen[vd->name] = n;
-                fn.localTypes[vd->name] = "[" + std::to_string(n) + " x i32]";
+                fn.localTypes[vd->name] = "[" + std::to_string(n) + " x " + elem + "]";
+                fn.localArrayElem[vd->name] = elem;
             } else {
                 std::string a = ensureAlloca(vd->name, fn);
                 if (vd->init) {
