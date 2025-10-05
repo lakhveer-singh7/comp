@@ -68,9 +68,7 @@ int main(int argc, char** argv) {
 #endif
 
     ErrorHandler semErr;
-    for (auto& fndef : g_functions) {
-        semanticCheck(*fndef, semErr);
-    }
+    semanticCheckModule(g_functions, semErr);
     if (semErr.hasErrors()) { semErr.printAll(); return 1; }
 
     IRGenerator irgen;

@@ -3,6 +3,7 @@
 #include "type_system.h"
 #include "error_handler.h"
 #include <unordered_set>
+#include <unordered_map>
 
 namespace {
 struct Scope {
@@ -99,4 +100,19 @@ void semanticCheck(const Function& fn, ErrorHandler& err) {
     } else {
         for (const auto& st : fn.body) checkStmt(st.get(), ctx);
     }
+}
+
+// Simple module-level checker scaffold: validates duplicate function names and arity match across calls
+void semanticCheckModule(const std::vector<std::unique_ptr<Function>>& fns, ErrorHandler& err) {
+    std::unordered_map<std::string, const Function*> ftable;
+    for (const auto& fn : fns) {
+        if (ftable.count(fn->name)) {
+            err.report({0,0}, "duplicate function '" + fn->name + "'");
+        } else {
+            ftable[fn->name] = fn.get();
+        }
+        // per-function checks
+        semanticCheck(*fn, err);
+    }
+    // Further checks would require expression traversal with types; stubbed for now
 }
