@@ -3,15 +3,17 @@ CXXFLAGS := -std=c++20 -O0 -g -Wall -Wextra -Wpedantic
 INCLUDE := -Iinclude -Ibuild
 LDFLAGS := 
 
-# Tools (may be missing in this environment)
+# Tools
 FLEX := flex
 BISON := bison
+FLEXFLAGS :=
+BISONFLAGS := -d
 
 BUILD_DIR := build
 SRC_DIR := src
 OUT_DIR := outputs
 
-# Generated files (placeholders for now)
+# Generated files
 LEXER_GEN := $(BUILD_DIR)/lexer.yy.cpp
 PARSER_GEN := $(BUILD_DIR)/parser.tab.cpp
 PARSER_HDR := $(BUILD_DIR)/parser.tab.hh
@@ -19,12 +21,12 @@ PARSER_HDR := $(BUILD_DIR)/parser.tab.hh
 SRCS := \
   main.cpp \
   $(SRC_DIR)/utils/error_handler.cpp \
-  $(SRC_DIR)/lexer/lexer.cpp \
-  $(SRC_DIR)/parser/parser.cpp \
   $(SRC_DIR)/semantic/symbol_table.cpp \
   $(SRC_DIR)/semantic/semantic.cpp \
   $(SRC_DIR)/ir/ir_utils.cpp \
-  $(SRC_DIR)/ir/ir_generator.cpp
+  $(SRC_DIR)/ir/ir_generator.cpp \
+  $(LEXER_GEN) \
+  $(PARSER_GEN)
 
 OBJS := $(SRCS:.cpp=.o)
 
@@ -44,15 +46,12 @@ mycc: $(OBJS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE) -c $< -o $@
 
-# Flex/Bison rules (not used yet)
+# Flex/Bison rules
 $(LEXER_GEN): src/lexer/lexer.l | $(BUILD_DIR)
-	@echo "[info] flex not configured yet; creating stub $(LEXER_GEN)";
-	@echo "// stub lexer" > $(LEXER_GEN)
+	$(FLEX) $(FLEXFLAGS) -o $@ $<
 
 $(PARSER_GEN) $(PARSER_HDR): src/parser/parser.y | $(BUILD_DIR)
-	@echo "[info] bison not configured yet; creating stub $(PARSER_GEN) and $(PARSER_HDR)";
-	@echo "// stub parser" > $(PARSER_GEN)
-	@echo "// stub parser hdr" > $(PARSER_HDR)
+	$(BISON) $(BISONFLAGS) -o $(PARSER_GEN) $<
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)

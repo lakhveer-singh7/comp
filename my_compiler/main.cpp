@@ -4,7 +4,7 @@
 #include <sstream>
 #include "error_handler.h"
 #include "lexer.h"
-#include "parser.h"
+#include "parser.tab.hh"
 #include "ir_generator.h"
 
 int main(int argc, char** argv) {
@@ -32,13 +32,26 @@ int main(int argc, char** argv) {
     std::string source = buf.str();
 
     ErrorHandler err;
-    Lexer lex(source);
-    Parser parser(lex, err);
-    auto fn = parser.parseFunction();
-    if (err.hasErrors() || !fn) {
-        err.printAll();
+    // Feed buffer into a temporary file stream for Flex
+    std::string tmpPath = "build/tmp_input.mc";
+    std::ofstream tmp(tmpPath);
+    tmp << source;
+    tmp.close();
+    FILE* f = std::fopen(tmpPath.c_str(), "r");
+    if (!f) {
+        std::cerr << "error: cannot reopen temp input\n";
         return 1;
     }
+    extern FILE* yyin;
+    yyin = f;
+    extern std::unique_ptr<Function> g_resultFunction;
+    if (yyparse() != 0) {
+        std::cerr << "parse failed\n";
+        std::fclose(f);
+        return 1;
+    }
+    std::fclose(f);
+    auto fn = std::move(g_resultFunction);
 
     IRGenerator irgen;
     std::string ir = irgen.generateModuleIR(*fn);

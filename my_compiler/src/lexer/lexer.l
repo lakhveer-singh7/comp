@@ -1,9 +1,61 @@
+%option noyywrap
 %{
-#include "lexer.h"
+#include <cstdio>
+#include "parser.tab.hh"
+#include "error_handler.h"
+
+extern int yylval; // We'll pass integer literals directly; real parser will use union
 %}
 
+digit      [0-9]
+id         [a-zA-Z_][a-zA-Z0-9_]*
+ws         [ \t\r\f\v]
+
 %%
-[ \t\r\n]+           ;
-"int"              return 0; /* stub */
-.                  ;
+{ws}+                  ;
+\n                     ;
+"int"                  return T_INT;
+"return"               return T_RETURN;
+"if"                   return T_IF;
+"else"                 return T_ELSE;
+"while"                return T_WHILE;
+"for"                  return T_FOR;
+"do"                   return T_DO;
+"switch"               return T_SWITCH;
+"case"                 return T_CASE;
+"default"              return T_DEFAULT;
+"break"                return T_BREAK;
+"continue"             return T_CONTINUE;
+"goto"                 return T_GOTO;
+"typedef"              return T_TYPEDEF;
+"static"               return T_STATIC;
+
+"=="                   return T_EQ;
+"!="                   return T_NE;
+"<="                   return T_LE;
+">="                   return T_GE;
+"&&"                   return T_AND;
+"||"                   return T_OR;
+
+"<"                    return '<';
+">"                    return '>';
+"+"                    return '+';
+"-"                    return '-';
+"*"                    return '*';
+"/"                    return '/';
+"!"                    return '!';
+"="                    return '=';
+";"                    return ';';
+","                    return ',';
+"("                    return '(';
+")"                    return ')';
+"{"                    return '{';
+"}"                    return '}';
+"["                    return '[';
+"]"                    return ']';
+":"                    return ':';
+
+{digit}+               { yylval = atoi(yytext); return T_NUM; }
+{id}                    { yylval = 0; return T_ID; }
+.                       { return yytext[0]; }
 %%
