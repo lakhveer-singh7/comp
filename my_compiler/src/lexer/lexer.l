@@ -23,6 +23,11 @@ ws         [ \t\r\f\v]
 \n                     ;
 "int"                  return T_INT;
 "return"               return T_RETURN;
+"char"                 return T_CHAR;
+"void"                 return T_VOID;
+"struct"               return T_STRUCT;
+"typedef"              return T_TYPEDEF;
+"static"               return T_STATIC;
 "if"                   return T_IF;
 "else"                 return T_ELSE;
 "while"                return T_WHILE;
@@ -43,6 +48,8 @@ ws         [ \t\r\f\v]
 ">="                   return T_GE;
 "&&"                   return T_AND;
 "||"                   return T_OR;
+"<<"                   return T_SHL;
+">>"                   return T_SHR;
 
 "<"                    return '<';
 ">"                    return '>';
@@ -51,6 +58,12 @@ ws         [ \t\r\f\v]
 "*"                    return '*';
 "/"                    return '/';
 "!"                    return '!';
+"&"                    return '&';
+"|"                    return '|';
+"^"                    return '^';
+"%"                    return '%';
+"."                    return '.';
+"->"                   return T_ARROW;
 "="                    return '=';
 ";"                    return ';';
 ","                    return ',';
@@ -62,7 +75,9 @@ ws         [ \t\r\f\v]
 "]"                    return ']';
 ":"                    return ':';
 
-{digit}+               { yylval.ival = atoi(yytext); return T_NUM; }
+{digit}+               { yylval.ival = strtol(yytext, NULL, 10); return T_NUM; }
+\"([^\\\n]|\\.)*\"   { yylval.sval = strndup(yytext+1, yyleng-2); return T_STRING; }
+\'([^\\\n]|\\.)\'     { yylval.ival = (unsigned char)yytext[1]; return T_NUM; }
 {id}                    { yylval.sval = strdup(yytext); return T_ID; }
 .                       { return yytext[0]; }
 %%
