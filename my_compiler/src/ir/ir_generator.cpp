@@ -84,9 +84,10 @@ std::string IRGenerator::ensureAlloca(const std::string& name, FunctionContext& 
     auto it = fn.locals.find(name);
     if (it != fn.locals.end()) return it->second;
     std::string a = newTemp(fn);
-    fn.entryAllocas.push_back("  " + a + " = alloca i32\n");
+    std::string ty = fn.localTypes.count(name) ? fn.localTypes[name] : std::string("i32");
+    fn.entryAllocas.push_back("  " + a + " = alloca " + ty + "\n");
     fn.locals[name] = a;
-    fn.localTypes[name] = "i32";
+    if (!fn.localTypes.count(name)) fn.localTypes[name] = ty;
     return a;
 }
 
