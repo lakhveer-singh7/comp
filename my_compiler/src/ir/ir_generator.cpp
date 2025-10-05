@@ -60,6 +60,7 @@ std::string IRGenerator::ensureAlloca(const std::string& name, FunctionContext& 
     std::string a = newTemp(fn);
     fn.entryAllocas.push_back("  " + a + " = alloca i32\n");
     fn.locals[name] = a;
+    fn.localTypes[name] = "i32";
     return a;
 }
 
@@ -175,10 +176,14 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
         auto git = globalVars.find(v->name);
         IRValue out; out.type = "i32"; out.reg = newTemp(fn);
         if (git != globalVars.end()) {
-            fn.body << "  " << out.reg << " = load i32, i32* " << git->second << "\n";
+            std::string ty = globalVarTypes[v->name].empty() ? std::string("i32") : globalVarTypes[v->name];
+            fn.body << "  " << out.reg << " = load " << ty << ", " << ty << "* " << git->second << "\n";
+            out.type = ty;
         } else {
             std::string a = ensureAlloca(v->name, fn);
-            fn.body << "  " << out.reg << " = load i32, i32* " << a << "\n";
+            std::string ty = fn.localTypes[v->name].empty() ? std::string("i32") : fn.localTypes[v->name];
+            fn.body << "  " << out.reg << " = load " << ty << ", " << ty << "* " << a << "\n";
+            out.type = ty;
         }
         return out;
     }
@@ -407,14 +412,17 @@ void IRGenerator::emitStmt(const Stmt* s, FunctionContext& fn) {
                 if (vd->init) {
                     if (auto num = dynamic_cast<NumberExpr*>(vd->init.get())) init = num->value;
                 }
-                globalDefs.push_back(g + " = internal global i32 " + std::to_string(init) + ", align 4\n");
+                std::string gty = "i32";
+                if (vd->type && vd->type->kind == TypeKind::Char) gty = "i8";
+                globalDefs.push_back(g + " = internal global " + gty + " " + std::to_string(init) + ", align 4\n");
                 globalVars[vd->name] = g;
+                globalVarTypes[vd->name] = gty;
             }
             if (vd->init && !dynamic_cast<NumberExpr*>(vd->init.get())) {
                 // runtime init: store at entry
-                IRValue a; a.type = "i32*"; a.reg = g;
+                IRValue a; a.type = globalVarTypes[vd->name] + "*"; a.reg = g;
                 IRValue val = emitExpr(vd->init.get(), fn);
-                fn.body << "  store i32 " << val.reg << ", i32* " << a.reg << "\n";
+                fn.body << "  store " << globalVarTypes[vd->name] << " " << val.reg << ", " << globalVarTypes[vd->name] << "* " << a.reg << "\n";
             }
         } else {
             if (vd->type && vd->type->kind == TypeKind::Array) {
@@ -424,11 +432,13 @@ void IRGenerator::emitStmt(const Stmt* s, FunctionContext& fn) {
                 fn.entryAllocas.push_back("  " + a + " = alloca [" + std::to_string(n) + " x i32]\n");
                 fn.locals[vd->name] = a;
                 fn.localArrayLen[vd->name] = n;
+                fn.localTypes[vd->name] = "[" + std::to_string(n) + " x i32]";
             } else {
                 std::string a = ensureAlloca(vd->name, fn);
                 if (vd->init) {
                     IRValue val = emitExpr(vd->init.get(), fn);
-                    fn.body << "  store i32 " << val.reg << ", i32* " << a << "\n";
+                    std::string ty = fn.localTypes[vd->name].empty() ? std::string("i32") : fn.localTypes[vd->name];
+                    fn.body << "  store " << ty << " " << val.reg << ", " << ty << "* " << a << "\n";
                 }
             }
         }

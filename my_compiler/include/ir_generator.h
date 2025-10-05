@@ -21,6 +21,7 @@ private:
         std::ostringstream body;
         std::vector<std::string> entryAllocas; // emitted at function entry
         std::unordered_map<std::string, std::string> locals; // var -> %alloca
+        std::unordered_map<std::string, std::string> localTypes; // var -> IR type (i32/i8/[N x i32])
         int tempCounter = 0;
         int blockCounter = 0;
         std::string currentLabel;
@@ -34,6 +35,7 @@ private:
     std::unordered_map<std::string, std::string> strToGlobal;
     std::vector<std::string> globalDefs;
     std::unordered_map<std::string, std::string> globalVars; // name -> @g
+    std::unordered_map<std::string, std::string> globalVarTypes; // name -> IR type (i32/i8)
     std::unordered_map<std::string, std::string> funcDecls;  // name -> signature
     bool usedMalloc = false;
     bool usedFree = false;
