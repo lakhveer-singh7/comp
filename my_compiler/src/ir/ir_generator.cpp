@@ -576,12 +576,14 @@ void IRGenerator::emitFunctionPrologue(const Function& fnNode, FunctionContext& 
     // Map parameters to allocas and store incoming values
     for (size_t i = 0; i < fnNode.detailedParams.size(); ++i) {
         const auto& p = fnNode.detailedParams[i];
+        std::string ty = typeToIR(p.type);
         std::string a = newTemp(fn);
-        fn.entryAllocas.push_back("  " + a + " = alloca i32\n");
+        fn.entryAllocas.push_back("  " + a + " = alloca " + ty + "\n");
         fn.locals[p.name] = a;
+        fn.localTypes[p.name] = ty;
         // Get LLVM argument name: %0, %1, ...
         std::string arg = "%" + std::to_string(i);
-        fn.body << "  store i32 " << arg << ", i32* " << a << "\n";
+        fn.body << "  store " << ty << " " << arg << ", " << ty << "* " << a << "\n";
     }
 }
 
