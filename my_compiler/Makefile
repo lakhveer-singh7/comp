@@ -18,7 +18,7 @@ OUT_DIR := outputs
 # Generated files
 LEXER_GEN := $(BUILD_DIR)/lexer.yy.cpp
 PARSER_GEN := $(BUILD_DIR)/parser.tab.cpp
-PARSER_HDR := $(BUILD_DIR)/parser.tab.h
+PARSER_HDR := $(BUILD_DIR)/parser.tab.hh
 
 # Base sources
 SRCS := \
@@ -59,7 +59,7 @@ $(LEXER_GEN): src/lexer/lexer.l $(PARSER_HDR) | $(BUILD_DIR)
 	$(FLEX) $(FLEXFLAGS) -o $@ $<
 
 $(PARSER_GEN) $(PARSER_HDR): src/parser/parser.y | $(BUILD_DIR)
-	$(BISON) $(BISONFLAGS) -o $(PARSER_GEN) $<
+	$(BISON) $(BISONFLAGS) --defines=$(PARSER_HDR) -o $(PARSER_GEN) $<
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)

@@ -4,11 +4,7 @@
 #include <sstream>
 #include "error_handler.h"
 #include "lexer.h"
-#if USE_FLEX_BISON
-#include "parser.tab.h"
-#else
-#include "parser.h"
-#endif
+#include "parser.tab.hh"
 #include "ir_generator.h"
 
 int main(int argc, char** argv) {
