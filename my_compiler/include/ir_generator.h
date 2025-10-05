@@ -68,4 +68,5 @@ private:
     std::string getOrCreateLabel(FunctionContext& fn, const std::string& userLabel);
     std::string sanitizeGlobal(const std::string& name) { return "@" + name; }
     void ensureStructType(const std::string& name);
+    std::string typeToIR(Type* t);
 };

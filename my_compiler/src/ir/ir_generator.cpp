@@ -1,3 +1,29 @@
+#include "type_system.h"
+std::string IRGenerator::typeToIR(Type* t) {
+    if (!t) return "i32";
+    switch (t->kind) {
+        case TypeKind::Int: return "i32";
+        case TypeKind::Char: return "i8";
+        case TypeKind::Void: return "void";
+        case TypeKind::Pointer: {
+            std::string e = typeToIR(t->element);
+            if (e.rfind("%struct.", 0) == 0) return e + "*";
+            return e + "*";
+        }
+        case TypeKind::Array: {
+            return "[" + std::to_string(t->arrayLength) + " x " + typeToIR(t->element) + "]";
+        }
+        case TypeKind::Struct: {
+            ensureStructType(t->structName);
+            return "%struct." + t->structName;
+        }
+        case TypeKind::Function: {
+            // return type for signature contexts
+            return typeToIR(t->element);
+        }
+    }
+    return "i32";
+}
 #include "ir_generator.h"
 #include <cassert>
 
@@ -653,10 +679,11 @@ std::string IRGenerator::generateModuleIR(const std::vector<std::unique_ptr<Func
         FunctionContext ctx;
         ctx.currentLabel.clear();
 
-        mod << "define i32 @" << fn->name << "(";
+        std::string retIR = typeToIR(fn->returnType);
+        mod << "define " << retIR << " @" << fn->name << "(";
         for (size_t i=0;i<fn->detailedParams.size();++i) {
             if (i) mod << ", ";
-            mod << "i32 %" << i;
+            mod << typeToIR(fn->detailedParams[i].type) << " %" << i;
         }
         mod << ") {\n";
         ensureBlock(ctx);
@@ -666,15 +693,15 @@ std::string IRGenerator::generateModuleIR(const std::vector<std::unique_ptr<Func
         } else if (!fn->body.empty()) {
             if (auto ret = dynamic_cast<ReturnStmt*>(fn->body.front().get())) {
                 IRValue v = emitExpr(ret->value.get(), ctx);
-                ctx.body << "  ret i32 " << v.reg << "\n";
+                ctx.body << "  ret " << retIR << " " << v.reg << "\n";
             } else {
-                ctx.body << "  ret i32 0\n";
+                ctx.body << "  ret " << retIR << " 0\n";
             }
         } else {
-            ctx.body << "  ret i32 0\n";
+            ctx.body << "  ret " << retIR << " 0\n";
         }
         if (!ctx.currentTerminated) {
-            ctx.body << "  ret i32 0\n";
+            ctx.body << "  ret " << retIR << " 0\n";
         }
         std::ostringstream bodyFull;
         bodyFull << "entry:\n";
