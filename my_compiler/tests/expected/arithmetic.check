@@ -1,0 +1,5 @@
+;; CHECK:^define i32 @main\(\) \{
+;; CHECK:entry:
+;; CHECK:mul i32
+;; CHECK:add i32
+;; CHECK:ret i32

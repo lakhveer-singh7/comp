@@ -15,10 +15,15 @@ void yyerror(const char* s);
 std::unique_ptr<Function> g_resultFunction;
 %}
 
-%define api.value.type {int}
+%union {
+  long ival;
+  char* sval;
+  Expr* expr;
+}
 
 %token T_INT T_RETURN T_IF T_ELSE T_WHILE T_FOR T_DO T_SWITCH T_CASE T_DEFAULT T_BREAK T_CONTINUE T_GOTO T_TYPEDEF T_STATIC
-%token T_ID T_NUM
+%token <sval> T_ID
+%token <ival> T_NUM
 %token T_EQ T_NE T_LE T_GE T_AND T_OR
 
 %left T_OR
@@ -27,6 +32,7 @@ std::unique_ptr<Function> g_resultFunction;
 %left '<' '>' T_LE T_GE
 %left '+' '-'
 %left '*' '/'
+%type <expr> expr
 
 %%
 translation_unit
@@ -37,19 +43,20 @@ function
   : T_INT T_ID '(' ')' '{' T_RETURN expr ';' '}'
     {
       auto fn = std::make_unique<Function>();
-      fn->name = "main"; /* use parsed name if needed */
-      fn->body.emplace_back(std::make_unique<ReturnStmt>($7 ? std::make_unique<NumberExpr>($7) : std::make_unique<NumberExpr>(0)));
+      fn->name = std::string($2);
+      free($2);
+      fn->body.emplace_back(std::make_unique<ReturnStmt>(std::unique_ptr<Expr>($7)));
       g_resultFunction = std::move(fn);
     }
   ;
 
 expr
-  : expr '+' expr   { $$ = $1 + $3; }
-  | expr '-' expr   { $$ = $1 - $3; }
-  | expr '*' expr   { $$ = $1 * $3; }
-  | expr '/' expr   { $$ = $3 ? $1 / $3 : 0; }
+  : expr '+' expr   { $$ = new BinaryExpr('+', std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | expr '-' expr   { $$ = new BinaryExpr('-', std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | expr '*' expr   { $$ = new BinaryExpr('*', std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
+  | expr '/' expr   { $$ = new BinaryExpr('/', std::unique_ptr<Expr>($1), std::unique_ptr<Expr>($3)); }
   | '(' expr ')'    { $$ = $2; }
-  | T_NUM           { $$ = $1; }
+  | T_NUM           { $$ = new NumberExpr($1); }
   ;
 %%
 

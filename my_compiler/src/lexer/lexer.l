@@ -4,7 +4,15 @@
 #include <cstdio>
 #include "parser.tab.h"
 
-extern int yylval; // yylval is int via bison %define api.value.type {int}
+%}
+
+%option yylineno
+
+%{
+#include <cstdlib>
+#include <cstring>
+#include "parser.tab.h"
+extern YYSTYPE yylval;
 %}
 
 digit      [0-9]
@@ -55,7 +63,7 @@ ws         [ \t\r\f\v]
 "]"                    return ']';
 ":"                    return ':';
 
-{digit}+               { yylval = atoi(yytext); return T_NUM; }
-{id}                    { yylval = 0; return T_ID; }
+{digit}+               { yylval.ival = atoi(yytext); return T_NUM; }
+{id}                    { yylval.sval = strdup(yytext); return T_ID; }
 .                       { return yytext[0]; }
 %%
