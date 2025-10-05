@@ -98,24 +98,48 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
         return IRValue{a, "i32*"};
     }
     if (auto m = dynamic_cast<const MemberExpr*>(e)) {
-        // Assume base is a local struct with known layout: %base = alloca %struct.S
+        // base.field where base is a local/global struct variable
+        std::string sname;
+        std::string basePtr;
+        bool isGlobal = false;
         if (auto bv = dynamic_cast<VarExpr*>(m->base.get())) {
-            std::string sname = fn.localStructName[bv->name];
+            auto itL = fn.localStructName.find(bv->name);
+            if (itL != fn.localStructName.end()) { sname = itL->second; basePtr = fn.locals[bv->name]; }
+            auto itG = globalStructName.find(bv->name);
+            if (sname.empty() && itG != globalStructName.end()) { sname = itG->second; basePtr = globalVars[bv->name]; isGlobal = true; }
+        }
+        if (!sname.empty()) {
             ensureStructType(sname);
-            std::string basePtr = fn.locals[bv->name];
-            // Placeholder: field index 0 (since we don't have real fields). Real impl would look up index.
-            IRValue gep; gep.type = "%struct." + sname + "*"; gep.reg = newTemp(fn);
-            fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << basePtr << ", i32 0, i32 0\n";
+            // lookup field index and type
+            extern std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
+            size_t idx = 0; std::string fty = "i32";
+            auto &vec = g_struct_field_types[sname];
+            for (size_t i=0;i<vec.size();++i) { if (vec[i].first == m->field) { idx = i; fty = vec[i].second; break; } }
+            IRValue gep; gep.type = fty + "*"; gep.reg = newTemp(fn);
+            if (isGlobal) {
+                fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << basePtr << ", i32 0, i32 " << idx << "\n";
+            } else {
+                fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << basePtr << ", i32 0, i32 " << idx << "\n";
+            }
             return gep;
         }
     }
     if (auto pm = dynamic_cast<const PtrMemberExpr*>(e)) {
-        // Assume base is %p = %struct.S*
+        // base->field where base is a pointer to struct
         IRValue base = emitExpr(pm->base.get(), fn);
-        std::string sname = "S"; // placeholder
+        // Heuristic: if base.type is %struct.X*, extract X
+        std::string sname;
+        if (base.type.rfind("%struct.", 0) == 0) {
+            auto pos = base.type.find('*');
+            sname = base.type.substr(std::string("%struct.").size(), pos - std::string("%struct.").size());
+        }
         ensureStructType(sname);
-        IRValue gep; gep.type = "%struct." + sname + "*"; gep.reg = newTemp(fn);
-        fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << base.reg << ", i32 0, i32 0\n";
+        extern std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
+        size_t idx = 0; std::string fty = "i32";
+        auto &vec = g_struct_field_types[sname];
+        for (size_t i=0;i<vec.size();++i) { if (vec[i].first == pm->field) { idx = i; fty = vec[i].second; break; } }
+        IRValue gep; gep.type = fty + "*"; gep.reg = newTemp(fn);
+        fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << (sname.empty()?std::string("S"):sname) << ", %struct." << (sname.empty()?std::string("S"):sname) << "* " << base.reg << ", i32 0, i32 " << idx << "\n";
         return gep;
     }
     if (auto idx = dynamic_cast<const ArrayIndexExpr*>(e)) {
@@ -129,14 +153,16 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
             if (it != fn.localArrayLen.end()) {
                 // GEP into [N x i32]
                 std::string arr = fn.locals[v->name];
-                IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
-                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds [" << it->second << " x i32], [" << it->second << " x i32]* " << arr << ", i64 0, i64 " << idx64.reg << "\n";
+                std::string elemTy = fn.localArrayElem.count(v->name) ? fn.localArrayElem[v->name] : std::string("i32");
+                IRValue eltPtr; eltPtr.type = elemTy + "*"; eltPtr.reg = newTemp(fn);
+                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds [" << it->second << " x " << elemTy << "], [" << it->second << " x " << elemTy << "]* " << arr << ", i64 0, i64 " << idx64.reg << "\n";
                 return eltPtr;
             } else {
                 // Treat as pointer i32*
                 IRValue basePtr = emitExpr(idx->base.get(), fn);
-                IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
-                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds i32, i32* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
+                std::string elemTy = (basePtr.type == "i8*") ? std::string("i8") : std::string("i32");
+                IRValue eltPtr; eltPtr.type = elemTy + "*"; eltPtr.reg = newTemp(fn);
+                fn.body << "  " << eltPtr.reg << " = getelementptr inbounds " << elemTy << ", " << elemTy << "* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
                 return eltPtr;
             }
         } else {
@@ -145,8 +171,9 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
             IRValue iv = emitExpr(idx->index.get(), fn);
             IRValue idx64; idx64.type = "i64"; idx64.reg = newTemp(fn);
             fn.body << "  " << idx64.reg << " = zext i32 " << iv.reg << " to i64\n";
-            IRValue eltPtr; eltPtr.type = "i32*"; eltPtr.reg = newTemp(fn);
-            fn.body << "  " << eltPtr.reg << " = getelementptr inbounds i32, i32* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
+            std::string elemTy = (basePtr.type == "i8*") ? std::string("i8") : std::string("i32");
+            IRValue eltPtr; eltPtr.type = elemTy + "*"; eltPtr.reg = newTemp(fn);
+            fn.body << "  " << eltPtr.reg << " = getelementptr inbounds " << elemTy << ", " << elemTy << "* " << basePtr.reg << ", i64 " << idx64.reg << "\n";
             return eltPtr;
         }
     }
