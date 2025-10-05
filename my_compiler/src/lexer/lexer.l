@@ -15,6 +15,7 @@ extern YYSTYPE yylval;
 %}
 
 digit      [0-9]
+floatconst ([0-9]+\.[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?
 id         [a-zA-Z_][a-zA-Z0-9_]*
 ws         [ \t\r\f\v]
 
@@ -81,6 +82,7 @@ ws         [ \t\r\f\v]
 "]"                    return ']';
 ":"                    return ':';
 
+{floatconst}           { yylval.sval = strndup(yytext, yyleng); return T_FLOATLIT; }
 {digit}+               { yylval.ival = strtol(yytext, NULL, 10); return T_NUM; }
 \"([^\\\n]|\\.)*\"   { yylval.sval = strndup(yytext+1, yyleng-2); return T_STRING; }
 \'([^\\\n]|\\.)\'     { yylval.ival = (unsigned char)yytext[1]; return T_NUM; }

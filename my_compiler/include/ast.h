@@ -13,6 +13,11 @@ struct NumberExpr : Expr {
     explicit NumberExpr(long v) : value(v) {}
 };
 
+struct FloatLiteralExpr : Expr {
+    double value;
+    explicit FloatLiteralExpr(double v) : value(v) {}
+};
+
 struct VarExpr : Expr {
     std::string name;
     explicit VarExpr(std::string n) : name(std::move(n)) {}

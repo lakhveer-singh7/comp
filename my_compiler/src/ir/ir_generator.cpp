@@ -4,6 +4,7 @@ std::string IRGenerator::typeToIR(Type* t) {
     switch (t->kind) {
         case TypeKind::Int: return "i32";
         case TypeKind::Char: return "i8";
+        case TypeKind::Float: return "float";
         case TypeKind::Void: return "void";
         case TypeKind::Pointer: {
             std::string e = typeToIR(t->element);
@@ -241,6 +242,10 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
     if (auto num = dynamic_cast<const NumberExpr*>(e)) {
         return IRValue{std::to_string(num->value), "i32"};
     }
+    if (auto fl = dynamic_cast<const FloatLiteralExpr*>(e)) {
+        // LLVM textual float literal as decimal; keep as float
+        return IRValue{std::to_string(fl->value), "float"};
+    }
     if (auto s = dynamic_cast<const StringLiteralExpr*>(e)) {
         return getStringPtr(s->value, fn);
     }
@@ -264,6 +269,25 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
         IRValue l = emitExpr(bin->lhs.get(), fn);
         IRValue r = emitExpr(bin->rhs.get(), fn);
         std::string op = opToLlvm(bin->op);
+        if (l.type == "float" || r.type == "float") {
+            // float arithmetic or comparison
+            IRValue lf = (l.type == "float") ? l : ensureCast(l, "float", fn);
+            IRValue rf = (r.type == "float") ? r : ensureCast(r, "float", fn);
+            if (op.rfind("icmp", 0) == 0) {
+                // fcmp ordered comparisons
+                std::string pred = (bin->op=="<"?"olt": bin->op==">"?"ogt": bin->op=="<="?"ole": bin->op==">="?"oge": bin->op=="=="?"oeq":"one");
+                IRValue cmp; cmp.type = "i1"; cmp.reg = newTemp(fn);
+                fn.body << "  " << cmp.reg << " = fcmp " << pred << " float " << lf.reg << ", " << rf.reg << "\n";
+                IRValue z; z.type = "i32"; z.reg = newTemp(fn);
+                fn.body << "  " << z.reg << " = zext i1 " << cmp.reg << " to i32\n";
+                return z;
+            } else {
+                std::string fop = (bin->op=="+"?"fadd": bin->op=="-"?"fsub": bin->op=="*"?"fmul":"fdiv");
+                IRValue out; out.type = "float"; out.reg = newTemp(fn);
+                fn.body << "  " << out.reg << " = " << fop << " float " << lf.reg << ", " << rf.reg << "\n";
+                return out;
+            }
+        }
         if (op.rfind("icmp", 0) == 0) {
             IRValue cmp; cmp.type = "i1"; cmp.reg = newTemp(fn);
             fn.body << "  " << cmp.reg << " = " << op << " i32 " << l.reg << ", " << r.reg << "\n";

@@ -36,11 +36,12 @@ std::unordered_map<std::string, Type*> g_func_typedefs; // name -> function type
   std::vector<std::pair<std::string,std::string>>* flist;
 }
 
-%token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC T_EXTERN T_SIZEOF
+%token T_INT T_CHAR T_FLOAT T_VOID T_STRUCT T_TYPEDEF T_STATIC T_EXTERN T_SIZEOF
 %locations
 %token T_RETURN T_IF T_ELSE T_WHILE T_FOR T_DO T_SWITCH T_CASE T_DEFAULT T_BREAK T_CONTINUE T_GOTO
 %token <sval> T_ID
 %token <ival> T_NUM
+%token <sval> T_FLOATLIT
 %token T_EQ T_NE T_LE T_GE T_AND T_OR T_SHL T_SHR T_ARROW T_STRING
 
 %left T_OR
@@ -421,6 +422,7 @@ arg_list
 primary
   : '(' expr ')'             { $$ = $2; }
   | T_NUM                    { $$ = new NumberExpr($1); }
+  | T_FLOATLIT               { $$ = new FloatLiteralExpr(strtod($1,nullptr)); free($1); }
   | T_ID                     { $$ = new VarExpr(std::string($1)); free($1); }
   | T_STRING                 { $$ = new StringLiteralExpr(std::string($1)); free($1); }
   | T_SIZEOF '(' T_ID ')'    { $$ = new NumberExpr(4); /* simplistic sizeof int/char default */ }
