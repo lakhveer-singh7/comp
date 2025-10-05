@@ -4,7 +4,11 @@
 #include <sstream>
 #include "error_handler.h"
 #include "lexer.h"
-#include "parser.tab.hh"
+#if USE_FLEX_BISON
+#include "parser.tab.h"
+#else
+#include "parser.h"
+#endif
 #include "ir_generator.h"
 
 int main(int argc, char** argv) {
@@ -32,7 +36,8 @@ int main(int argc, char** argv) {
     std::string source = buf.str();
 
     ErrorHandler err;
-    // Feed buffer into a temporary file stream for Flex
+#if USE_FLEX_BISON
+    // Feed buffer into a temporary file stream for Flex/Bison
     std::string tmpPath = "build/tmp_input.mc";
     std::ofstream tmp(tmpPath);
     tmp << source;
@@ -52,6 +57,15 @@ int main(int argc, char** argv) {
     }
     std::fclose(f);
     auto fn = std::move(g_resultFunction);
+#else
+    Lexer lex(source);
+    Parser parser(lex, err);
+    auto fn = parser.parseFunction();
+    if (err.hasErrors() || !fn) {
+        err.printAll();
+        return 1;
+    }
+#endif
 
     IRGenerator irgen;
     std::string ir = irgen.generateModuleIR(*fn);

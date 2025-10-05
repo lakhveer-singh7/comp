@@ -15,7 +15,6 @@ void yyerror(const char* s);
 std::unique_ptr<Function> g_resultFunction;
 %}
 
-%define api.pure full
 %define api.value.type {int}
 
 %token T_INT T_RETURN T_IF T_ELSE T_WHILE T_FOR T_DO T_SWITCH T_CASE T_DEFAULT T_BREAK T_CONTINUE T_GOTO T_TYPEDEF T_STATIC

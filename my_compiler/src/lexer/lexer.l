@@ -1,10 +1,10 @@
 %option noyywrap
+%option nounput noinput noyy_top_state
 %{
 #include <cstdio>
-#include "parser.tab.hh"
-#include "error_handler.h"
+#include "parser.tab.h"
 
-extern int yylval; // We'll pass integer literals directly; real parser will use union
+extern int yylval; // yylval is int via bison %define api.value.type {int}
 %}
 
 digit      [0-9]

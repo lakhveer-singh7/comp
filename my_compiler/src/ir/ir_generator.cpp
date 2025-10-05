@@ -111,6 +111,9 @@ std::string IRGenerator::generateModuleIR(const Function& fn) {
     } else {
         ir << "  ret i32 0\n";
     }
-    ir << "}\n";
+    ir << "}\n\n";
+    // Predeclare common libc calls so testcases don't need #include
+    ir << "declare i32 @printf(i8*, ...)\n";
+    ir << "declare i32 @scanf(i8*, ...)\n";
     return ir.str();
 }
