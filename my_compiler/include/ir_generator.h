@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "ast.h"
 
@@ -14,6 +15,7 @@ struct IRValue {
 class IRGenerator {
 public:
     std::string generateModuleIR(const Function& fn);
+    std::string generateModuleIR(const std::vector<std::unique_ptr<Function>>& fns);
 
 private:
     struct LoopTargets { std::string continueLabel; std::string breakLabel; };
@@ -29,6 +31,8 @@ private:
         std::vector<LoopTargets> loopStack;
         std::unordered_map<std::string, std::string> labelMap; // user label -> llvm label
         std::unordered_map<std::string, size_t> localArrayLen; // local arrays length by name
+        std::unordered_map<std::string, std::string> localArrayElem; // name -> element IR type (i32/i8)
+        std::unordered_map<std::string, std::string> localStructName; // name -> struct tag
     };
 
     // Module-level globals for string literals
@@ -36,9 +40,11 @@ private:
     std::vector<std::string> globalDefs;
     std::unordered_map<std::string, std::string> globalVars; // name -> @g
     std::unordered_map<std::string, std::string> globalVarTypes; // name -> IR type (i32/i8)
+    std::unordered_map<std::string, std::string> globalStructName; // name -> struct tag
     std::unordered_map<std::string, std::string> funcDecls;  // name -> signature
     bool usedMalloc = false;
     bool usedFree = false;
+    std::unordered_set<std::string> usedFunctions;
 
     // Expressions/statements
     IRValue emitExpr(const Expr* e, FunctionContext& fn);

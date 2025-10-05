@@ -57,7 +57,6 @@ int main(int argc, char** argv) {
         std::cerr << "no functions parsed\n";
         return 1;
     }
-    auto fn = std::move(g_functions.front());
 #else
     Lexer lex(source);
     Parser parser(lex, err);
@@ -69,14 +68,13 @@ int main(int argc, char** argv) {
 #endif
 
     ErrorHandler semErr;
-    semanticCheck(*fn, semErr);
-    if (semErr.hasErrors()) {
-        semErr.printAll();
-        return 1;
+    for (auto& fndef : g_functions) {
+        semanticCheck(*fndef, semErr);
     }
+    if (semErr.hasErrors()) { semErr.printAll(); return 1; }
 
     IRGenerator irgen;
-    std::string ir = irgen.generateModuleIR(*fn);
+    std::string ir = irgen.generateModuleIR(g_functions);
 
     std::ofstream out(outputPath);
     if (!out) {

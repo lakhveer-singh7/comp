@@ -227,7 +227,7 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
                 fn.body << "  " << out.reg << " = call i32 (i8*, ...) @printf(i8* " << fmt.reg;
                 for (size_t i=1;i<call->args.size();++i) {
                     IRValue ai = emitExpr(call->args[i].get(), fn);
-                    fn.body << ", i32 " << ai.reg;
+                    fn.body << ", " << ai.type << " " << ai.reg;
                 }
                 fn.body << ")\n";
                 return out;
@@ -251,10 +251,32 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
                 fn.body << "  call void @free(i8* " << p.reg << ")\n";
                 return IRValue{"0","i32"};
             }
+            // Known function definitions or externs
+            auto sigIt = funcDecls.find(name);
+            if (sigIt != funcDecls.end()) {
+                IRValue out; out.type = "i32"; out.reg = newTemp(fn);
+                fn.body << "  " << out.reg << " = call i32 @" << name << "(";
+                for (size_t i=0;i<call->args.size();++i) {
+                    IRValue ai = emitExpr(call->args[i].get(), fn);
+                    if (i) fn.body << ", ";
+                    fn.body << ai.type << " " << ai.reg;
+                }
+                fn.body << ")\n";
+                usedFunctions.insert(name);
+                return out;
+            }
         }
         // Generic direct call with i32 args and i32 return
         IRValue out; out.type = "i32"; out.reg = newTemp(fn);
-        fn.body << "  " << out.reg << " = call i32 @unknown()\n";
+        // Try function pointer call
+        IRValue cal = emitExpr(call->callee.get(), fn);
+        fn.body << "  " << out.reg << " = call i32 " << cal.reg << "(";
+        for (size_t i=0;i<call->args.size();++i) {
+            IRValue ai = emitExpr(call->args[i].get(), fn);
+            if (i) fn.body << ", ";
+            fn.body << ai.type << " " << ai.reg;
+        }
+        fn.body << ")\n";
         return out;
     }
     assert(false && "unsupported expr");
@@ -534,4 +556,66 @@ std::string IRGenerator::generateModuleIR(const Function& fn) {
     if (usedMalloc) out << "declare noalias i8* @malloc(i64)\n";
     if (usedFree) out << "declare void @free(i8*)\n";
     return out.str();
+}
+
+std::string IRGenerator::generateModuleIR(const std::vector<std::unique_ptr<Function>>& fns) {
+    // Reset module state
+    strToGlobal.clear();
+    globalDefs.clear();
+    globalVars.clear();
+    globalVarTypes.clear();
+    usedMalloc = usedFree = false;
+    usedFunctions.clear();
+
+    std::ostringstream mod;
+    mod << "; ModuleID = 'my_compiler'\n";
+    mod << "source_filename = \"my_compiler\"\n\n";
+
+    // Record function declarations for calls between functions
+    for (const auto& fn : fns) {
+        funcDecls[fn->name] = "i32"; // i32(...)
+    }
+
+    // Emit all functions
+    for (const auto& fn : fns) {
+        FunctionContext ctx;
+        ctx.currentLabel.clear();
+
+        mod << "define i32 @" << fn->name << "(";
+        for (size_t i=0;i<fn->detailedParams.size();++i) {
+            if (i) mod << ", ";
+            mod << "i32 %" << i;
+        }
+        mod << ") {\n";
+        ensureBlock(ctx);
+        emitFunctionPrologue(*fn, ctx);
+        if (fn->bodyBlock) {
+            emitBlock(fn->bodyBlock.get(), ctx);
+        } else if (!fn->body.empty()) {
+            if (auto ret = dynamic_cast<ReturnStmt*>(fn->body.front().get())) {
+                IRValue v = emitExpr(ret->value.get(), ctx);
+                ctx.body << "  ret i32 " << v.reg << "\n";
+            } else {
+                ctx.body << "  ret i32 0\n";
+            }
+        } else {
+            ctx.body << "  ret i32 0\n";
+        }
+        if (!ctx.currentTerminated) {
+            ctx.body << "  ret i32 0\n";
+        }
+        std::ostringstream bodyFull;
+        bodyFull << "entry:\n";
+        for (auto& a : ctx.entryAllocas) bodyFull << a;
+        bodyFull << ctx.body.str();
+        mod << bodyFull.str();
+        mod << "}\n\n";
+    }
+
+    for (auto& g : globalDefs) mod << g;
+    mod << "declare i32 @printf(i8*, ...)\n";
+    mod << "declare i32 @scanf(i8*, ...)\n";
+    if (usedMalloc) mod << "declare noalias i8* @malloc(i64)\n";
+    if (usedFree) mod << "declare void @free(i8*)\n";
+    return mod.str();
 }
