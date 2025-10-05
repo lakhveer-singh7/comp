@@ -2,8 +2,7 @@
 %option nounput noinput noyy_top_state
 %{
 #include <cstdio>
-#include "parser.tab.h"
-
+#include "parser.tab.hh"
 %}
 
 %option yylineno
@@ -11,7 +10,7 @@
 %{
 #include <cstdlib>
 #include <cstring>
-#include "parser.tab.h"
+#include "parser.tab.hh"
 extern YYSTYPE yylval;
 %}
 
