@@ -87,6 +87,16 @@ int IRGenerator::emitExpr(const Expr* e, std::ostringstream& ir, int& t) {
         }
         // & and * would require symbol addresses; omitted here
     }
+    if (auto s = dynamic_cast<const StringLiteralExpr*>(e)) {
+        // Emit a global string constant and return i32 0 for now
+        // In a full implementation we would return i8* to the string
+        static int sg = 0;
+        std::string gname = "@.str" + std::to_string(sg++);
+        // This function cannot emit globals; as a minimal stub, return 0
+        int id = t++;
+        ir << "  %t" << id << " = add i32 0, 0\n";
+        return id;
+    }
     assert(false && "unsupported expr");
     return -1;
 }

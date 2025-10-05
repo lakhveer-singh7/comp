@@ -18,6 +18,11 @@ struct VarExpr : Expr {
     explicit VarExpr(std::string n) : name(std::move(n)) {}
 };
 
+struct StringLiteralExpr : Expr {
+    std::string value;
+    explicit StringLiteralExpr(std::string v) : value(std::move(v)) {}
+};
+
 struct UnaryExpr : Expr {
     std::string op; // "-", "!", "&", "*"
     std::unique_ptr<Expr> operand;

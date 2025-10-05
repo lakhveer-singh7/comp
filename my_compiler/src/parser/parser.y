@@ -203,7 +203,7 @@ primary
   : '(' expr ')'             { $$ = $2; }
   | T_NUM                    { $$ = new NumberExpr($1); }
   | T_ID                     { $$ = new VarExpr(std::string($1)); free($1); }
-  | T_STRING                 { $$ = new VarExpr(std::string("__strlit")); }
+  | T_STRING                 { $$ = new StringLiteralExpr(std::string($1)); free($1); }
   ;
 %%
 
