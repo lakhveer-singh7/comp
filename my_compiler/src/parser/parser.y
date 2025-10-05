@@ -36,7 +36,7 @@ std::unordered_map<std::string, Type*> g_func_typedefs; // name -> function type
   std::vector<std::pair<std::string,std::string>>* flist;
 }
 
-%token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC
+%token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC T_EXTERN T_SIZEOF
 %locations
 %token T_RETURN T_IF T_ELSE T_WHILE T_FOR T_DO T_SWITCH T_CASE T_DEFAULT T_BREAK T_CONTINUE T_GOTO
 %token <sval> T_ID
@@ -423,6 +423,7 @@ primary
   | T_NUM                    { $$ = new NumberExpr($1); }
   | T_ID                     { $$ = new VarExpr(std::string($1)); free($1); }
   | T_STRING                 { $$ = new StringLiteralExpr(std::string($1)); free($1); }
+  | T_SIZEOF '(' T_ID ')'    { $$ = new NumberExpr(4); /* simplistic sizeof int/char default */ }
   ;
 %%
 

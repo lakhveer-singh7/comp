@@ -28,6 +28,8 @@ ws         [ \t\r\f\v]
 "struct"               return T_STRUCT;
 "typedef"              return T_TYPEDEF;
 "static"               return T_STATIC;
+"extern"               return T_EXTERN;
+"sizeof"               return T_SIZEOF;
 "if"                   return T_IF;
 "else"                 return T_ELSE;
 "while"                return T_WHILE;
@@ -41,6 +43,9 @@ ws         [ \t\r\f\v]
 "goto"                 return T_GOTO;
 "typedef"              return T_TYPEDEF;
 "static"               return T_STATIC;
+// C/C++ style comments
+"//"[^\n]*            ;
+"/*"([^*]|\*+[^/])*"*/"  ;
 
 "=="                   return T_EQ;
 "!="                   return T_NE;
