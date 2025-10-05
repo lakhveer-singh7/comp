@@ -83,6 +83,11 @@ IRValue IRGenerator::getStringPtr(const std::string& s, FunctionContext& fn) {
 
 IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
     if (auto v = dynamic_cast<const VarExpr*>(e)) {
+        // Prefer global if present
+        auto git = globalVars.find(v->name);
+        if (git != globalVars.end()) {
+            return IRValue{git->second, "i32*"};
+        }
         std::string a = ensureAlloca(v->name, fn);
         return IRValue{a, "i32*"};
     }
@@ -126,6 +131,18 @@ IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
         }
         IRValue out; out.type = "i32"; out.reg = newTemp(fn);
         fn.body << "  " << out.reg << " = " << op << " i32 " << l.reg << ", " << r.reg << "\n";
+        return out;
+    }
+    if (auto v = dynamic_cast<const VarExpr*>(e)) {
+        // Load from local or global
+        auto git = globalVars.find(v->name);
+        IRValue out; out.type = "i32"; out.reg = newTemp(fn);
+        if (git != globalVars.end()) {
+            fn.body << "  " << out.reg << " = load i32, i32* " << git->second << "\n";
+        } else {
+            std::string a = ensureAlloca(v->name, fn);
+            fn.body << "  " << out.reg << " = load i32, i32* " << a << "\n";
+        }
         return out;
     }
     if (auto un = dynamic_cast<const UnaryExpr*>(e)) {
@@ -252,6 +269,113 @@ void IRGenerator::emitStmt(const Stmt* s, FunctionContext& fn) {
     }
     if (auto lab = dynamic_cast<const LabelStmt*>(s)) {
         startBlock(fn, getOrCreateLabel(fn, lab->label));
+        return;
+    }
+    if (auto dw = dynamic_cast<const DoWhileStmt*>(s)) {
+        std::string bodyL = newLabel(fn, "do.body");
+        std::string condL = newLabel(fn, "do.cond");
+        std::string endL  = newLabel(fn, "do.end");
+        branch(fn, bodyL);
+        startBlock(fn, bodyL);
+        fn.loopStack.push_back(LoopTargets{condL, endL});
+        emitStmt(dw->body.get(), fn);
+        fn.loopStack.pop_back();
+        branch(fn, condL);
+        startBlock(fn, condL);
+        IRValue c = toBool(emitExpr(dw->condition.get(), fn), fn);
+        cbranch(fn, c, bodyL, endL);
+        startBlock(fn, endL);
+        return;
+    }
+    if (auto f = dynamic_cast<const ForStmt*>(s)) {
+        std::string condL = newLabel(fn, "for.cond");
+        std::string bodyL = newLabel(fn, "for.body");
+        std::string iterL = newLabel(fn, "for.iter");
+        std::string endL  = newLabel(fn, "for.end");
+        if (f->init) emitStmt(f->init.get(), fn);
+        branch(fn, condL);
+        startBlock(fn, condL);
+        if (f->condition) {
+            IRValue c = toBool(emitExpr(f->condition.get(), fn), fn);
+            cbranch(fn, c, bodyL, endL);
+        } else {
+            branch(fn, bodyL);
+        }
+        startBlock(fn, bodyL);
+        fn.loopStack.push_back(LoopTargets{iterL, endL});
+        emitStmt(f->body.get(), fn);
+        fn.loopStack.pop_back();
+        branch(fn, iterL);
+        startBlock(fn, iterL);
+        if (f->iter) emitStmt(f->iter.get(), fn);
+        branch(fn, condL);
+        startBlock(fn, endL);
+        return;
+    }
+    if (auto sw = dynamic_cast<const SwitchStmt*>(s)) {
+        IRValue v = emitExpr(sw->value.get(), fn);
+        std::string endL = newLabel(fn, "switch.end");
+        std::string defaultL = sw->defaultBody.empty() ? endL : newLabel(fn, "switch.default");
+        // Prepare labels for cases
+        std::vector<std::pair<long,std::string>> caseLabels;
+        for (size_t i=0;i<sw->cases.size();++i) {
+            caseLabels.emplace_back(sw->cases[i].value, newLabel(fn, "switch.case"));
+        }
+        // Emit switch header
+        fn.body << "  switch i32 " << v.reg << ", label %" << defaultL << " [\n";
+        for (auto& kv : caseLabels) {
+            fn.body << "    i32 " << kv.first << ", label %" << kv.second << "\n";
+        }
+        fn.body << "  ]\n";
+        // Push break target
+        fn.loopStack.push_back(LoopTargets{"", endL});
+        // Emit cases
+        for (size_t i=0;i<sw->cases.size();++i) {
+            startBlock(fn, caseLabels[i].second);
+            for (const auto& st : sw->cases[i].statements) {
+                if (fn.currentTerminated) break;
+                emitStmt(st.get(), fn);
+            }
+            // fallthrough allowed: no forced branch
+        }
+        // Default
+        if (defaultL != endL) {
+            startBlock(fn, defaultL);
+            for (const auto& st : sw->defaultBody) {
+                if (fn.currentTerminated) break;
+                emitStmt(st.get(), fn);
+            }
+        }
+        // End
+        startBlock(fn, endL);
+        fn.loopStack.pop_back();
+        return;
+    }
+    if (auto vd = dynamic_cast<const VarDeclStmt*>(s)) {
+        if (vd->isStatic) {
+            // global variable
+            std::string g = sanitizeGlobal(vd->name);
+            if (!globalVars.count(vd->name)) {
+                long init = 0;
+                if (vd->init) {
+                    if (auto num = dynamic_cast<NumberExpr*>(vd->init.get())) init = num->value;
+                }
+                globalDefs.push_back(g + " = internal global i32 " + std::to_string(init) + ", align 4\n");
+                globalVars[vd->name] = g;
+            }
+            if (vd->init && !dynamic_cast<NumberExpr*>(vd->init.get())) {
+                // runtime init: store at entry
+                IRValue a; a.type = "i32*"; a.reg = g;
+                IRValue val = emitExpr(vd->init.get(), fn);
+                fn.body << "  store i32 " << val.reg << ", i32* " << a.reg << "\n";
+            }
+        } else {
+            std::string a = ensureAlloca(vd->name, fn);
+            if (vd->init) {
+                IRValue val = emitExpr(vd->init.get(), fn);
+                fn.body << "  store i32 " << val.reg << ", i32* " << a << "\n";
+            }
+        }
         return;
     }
 }

@@ -76,7 +76,7 @@ struct ExprStmt : Stmt {
 
 struct VarDeclStmt : Stmt {
     std::string name;
-    Type type;
+    Type* type = nullptr;
     bool isStatic = false;
     std::unique_ptr<Expr> init; // optional
 };
@@ -129,11 +129,11 @@ struct ReturnStmt : Stmt {
     explicit ReturnStmt(std::unique_ptr<Expr> v) : value(std::move(v)) {}
 };
 
-struct FunctionParam { std::string name; Type type; };
+struct FunctionParam { std::string name; Type* type = nullptr; };
 
 struct Function {
     std::string name;
-    Type returnType = Type::Int();
+    Type* returnType = Type::Int();
     std::vector<std::string> params; // legacy
     std::vector<FunctionParam> detailedParams; // preferred
     std::unique_ptr<BlockStmt> bodyBlock; // preferred body
