@@ -20,6 +20,7 @@ std::vector<std::unique_ptr<Function>> g_functions;
 std::unordered_set<std::string> g_typedef_ints;
 std::unordered_map<std::string, std::vector<std::string>> g_struct_fields;
 std::unordered_map<std::string, std::vector<std::pair<std::string,std::string>>> g_struct_field_types;
+std::unordered_map<std::string, Type*> g_func_typedefs; // name -> function type
 %}
 
 %union {
@@ -246,6 +247,38 @@ declaration
       g_struct_field_types[std::string($2)] = *$4;
       delete $4; free($2);
       $$ = new ExprStmt(std::unique_ptr<Expr>());
+    }
+  | T_TYPEDEF T_INT '(' '*' T_ID ')' '(' param_list_opt ')' ';'
+    {
+      // typedef int (*name)(params...);
+      std::vector<Type*> pts;
+      if ($8) { for (auto &p : *$8) pts.push_back(p.type); delete $8; }
+      g_func_typedefs[std::string($5)] = Type::FunctionOf(Type::Int(), pts);
+      free($5);
+      $$ = new ExprStmt(std::unique_ptr<Expr>());
+    }
+  | T_TYPEDEF T_CHAR '(' '*' T_ID ')' '(' param_list_opt ')' ';'
+    {
+      // typedef char (*name)(params...);
+      std::vector<Type*> pts;
+      if ($8) { for (auto &p : *$8) pts.push_back(p.type); delete $8; }
+      g_func_typedefs[std::string($5)] = Type::FunctionOf(Type::Char(), pts);
+      free($5);
+      $$ = new ExprStmt(std::unique_ptr<Expr>());
+    }
+  | T_ID T_ID ';'
+    {
+      // typedef-based variable declaration: if first ID is a typedef name
+      std::string tname($1); std::string vname($2); free($1); free($2);
+      auto itf = g_func_typedefs.find(tname);
+      if (itf != g_func_typedefs.end()) {
+        auto d = new VarDeclStmt(); d->isStatic=false; d->name=vname; d->type = Type::PointerTo(itf->second); $$=d;
+      } else if (g_typedef_ints.count(tname)) {
+        auto d = new VarDeclStmt(); d->isStatic=false; d->name=vname; d->type = Type::Int(); $$=d;
+      } else {
+        // Fallback: treat as int vname
+        auto d = new VarDeclStmt(); d->isStatic=false; d->name=vname; d->type = Type::Int(); $$=d;
+      }
     }
   ;
 
