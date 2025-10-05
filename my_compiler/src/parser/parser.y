@@ -4,6 +4,8 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <unordered_set>
+#include <unordered_map>
 #include "ast.h"
 
 // Interface to the outside world
@@ -11,8 +13,12 @@ extern int yylex(void);
 extern FILE* yyin;
 void yyerror(const char* s);
 
-// Build result
-std::unique_ptr<Function> g_resultFunction;
+// Build result: allow multiple functions
+std::vector<std::unique_ptr<Function>> g_functions;
+
+// Simple typedef and struct registries for semantic/IR glue
+std::unordered_set<std::string> g_typedef_ints;
+std::unordered_map<std::string, std::vector<std::string>> g_struct_fields;
 %}
 
 %union {
@@ -49,7 +55,8 @@ std::unique_ptr<Function> g_resultFunction;
 
 %%
 translation_unit
-  : function                               { /* result in g_resultFunction */ }
+  : function
+  | translation_unit function
   ;
 
 function
@@ -63,7 +70,7 @@ function
         delete $4;
       }
       fn->bodyBlock.reset(static_cast<BlockStmt*>($6));
-      g_resultFunction = std::move(fn);
+      g_functions.emplace_back(std::move(fn));
     }
   ;
 
@@ -203,6 +210,23 @@ declaration
   | T_INT T_ID '[' T_NUM ']' ';'
     {
       auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::ArrayOf(Type::Int(), (size_t)$4); $$ = d;
+    }
+  | T_STRUCT T_ID T_ID ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($3); d->type = Type::StructNamed(std::string($2), {}); free($2); free($3); $$ = d;
+    }
+  | T_TYPEDEF T_INT T_ID ';'
+    {
+      g_typedef_ints.insert(std::string($3)); free($3);
+      $$ = new ExprStmt(std::unique_ptr<Expr>());
+    }
+  | T_STRUCT T_ID '{' stmt_list '}' ';'
+    {
+      // stmt_list expected to be field decls like 'int a;' which our grammar can't distinguish;
+      // use a placeholder: empty or prior knowledge. We'll just record empty field list.
+      g_struct_fields[std::string($2)] = std::vector<std::string>();
+      free($2);
+      $$ = new ExprStmt(std::unique_ptr<Expr>());
     }
   ;
 

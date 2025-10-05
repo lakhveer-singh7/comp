@@ -6,6 +6,7 @@
 #include "lexer.h"
 #include "parser.tab.hh"
 #include "ir_generator.h"
+#include "semantic.h"
 
 int main(int argc, char** argv) {
     std::string outputPath = "outputs/output.ll";
@@ -45,14 +46,18 @@ int main(int argc, char** argv) {
     }
     extern FILE* yyin;
     yyin = f;
-    extern std::unique_ptr<Function> g_resultFunction;
+    extern std::vector<std::unique_ptr<Function>> g_functions;
     if (yyparse() != 0) {
         std::cerr << "parse failed\n";
         std::fclose(f);
         return 1;
     }
     std::fclose(f);
-    auto fn = std::move(g_resultFunction);
+    if (g_functions.empty()) {
+        std::cerr << "no functions parsed\n";
+        return 1;
+    }
+    auto fn = std::move(g_functions.front());
 #else
     Lexer lex(source);
     Parser parser(lex, err);
@@ -62,6 +67,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 #endif
+
+    ErrorHandler semErr;
+    semanticCheck(*fn, semErr);
+    if (semErr.hasErrors()) {
+        semErr.printAll();
+        return 1;
+    }
 
     IRGenerator irgen;
     std::string ir = irgen.generateModuleIR(*fn);
