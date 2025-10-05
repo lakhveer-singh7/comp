@@ -97,6 +97,27 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
         std::string a = ensureAlloca(v->name, fn);
         return IRValue{a, "i32*"};
     }
+    if (auto m = dynamic_cast<const MemberExpr*>(e)) {
+        // Assume base is a local struct with known layout: %base = alloca %struct.S
+        if (auto bv = dynamic_cast<VarExpr*>(m->base.get())) {
+            std::string sname = fn.localStructName[bv->name];
+            ensureStructType(sname);
+            std::string basePtr = fn.locals[bv->name];
+            // Placeholder: field index 0 (since we don't have real fields). Real impl would look up index.
+            IRValue gep; gep.type = "%struct." + sname + "*"; gep.reg = newTemp(fn);
+            fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << basePtr << ", i32 0, i32 0\n";
+            return gep;
+        }
+    }
+    if (auto pm = dynamic_cast<const PtrMemberExpr*>(e)) {
+        // Assume base is %p = %struct.S*
+        IRValue base = emitExpr(pm->base.get(), fn);
+        std::string sname = "S"; // placeholder
+        ensureStructType(sname);
+        IRValue gep; gep.type = "%struct." + sname + "*"; gep.reg = newTemp(fn);
+        fn.body << "  " << gep.reg << " = getelementptr inbounds %struct." << sname << ", %struct." << sname << "* " << base.reg << ", i32 0, i32 0\n";
+        return gep;
+    }
     if (auto idx = dynamic_cast<const ArrayIndexExpr*>(e)) {
         // Base can be local array name or a pointer
         if (auto v = dynamic_cast<VarExpr*>(idx->base.get())) {
@@ -131,6 +152,13 @@ IRValue IRGenerator::lvalueAddress(const Expr* e, FunctionContext& fn) {
     }
     assert(false && "unsupported lvalue");
     return IRValue{"", ""};
+}
+void IRGenerator::ensureStructType(const std::string& name) {
+    if (name.empty()) return;
+    if (usedStructs.count(name)) return;
+    usedStructs.insert(name);
+    // Minimal: opaque with single i32 field. Replace with real layout when semantic info exists.
+    structTypeDefs.push_back("%struct." + name + " = type { i32 }\n");
 }
 
 IRValue IRGenerator::emitExpr(const Expr* e, FunctionContext& fn) {
@@ -547,6 +575,8 @@ std::string IRGenerator::generateModuleIR(const Function& fn) {
     out << bodyFull.str();
     out << "}\n\n";
 
+    // Struct type defs
+    for (auto& td : structTypeDefs) out << td;
     // Globals
     for (auto& g : globalDefs) out << g;
 
@@ -612,6 +642,7 @@ std::string IRGenerator::generateModuleIR(const std::vector<std::unique_ptr<Func
         mod << "}\n\n";
     }
 
+    for (auto& td : structTypeDefs) mod << td;
     for (auto& g : globalDefs) mod << g;
     mod << "declare i32 @printf(i8*, ...)\n";
     mod << "declare i32 @scanf(i8*, ...)\n";

@@ -45,6 +45,8 @@ private:
     bool usedMalloc = false;
     bool usedFree = false;
     std::unordered_set<std::string> usedFunctions;
+    std::unordered_set<std::string> usedStructs;
+    std::vector<std::string> structTypeDefs;
 
     // Expressions/statements
     IRValue emitExpr(const Expr* e, FunctionContext& fn);
@@ -65,4 +67,5 @@ private:
     IRValue getStringPtr(const std::string& s, FunctionContext& fn);
     std::string getOrCreateLabel(FunctionContext& fn, const std::string& userLabel);
     std::string sanitizeGlobal(const std::string& name) { return "@" + name; }
+    void ensureStructType(const std::string& name);
 };
