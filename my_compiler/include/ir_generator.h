@@ -42,6 +42,7 @@ private:
     IRValue emitExpr(const Expr* e, FunctionContext& fn);
     void emitStmt(const Stmt* s, FunctionContext& fn);
     void emitBlock(const BlockStmt* blk, FunctionContext& fn);
+    void emitFunctionPrologue(const Function& fnNode, FunctionContext& fn);
 
     // Helpers
     std::string newTemp(FunctionContext& fn) { return "%t" + std::to_string(fn.tempCounter++); }

@@ -24,6 +24,7 @@ std::unique_ptr<Function> g_resultFunction;
   std::vector<Expr*>* args;
   std::vector<Stmt*>* slist;
   std::vector<SwitchCase>* cases;
+  std::vector<FunctionParam>* plist;
 }
 
 %token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC
@@ -44,6 +45,7 @@ std::unique_ptr<Function> g_resultFunction;
 %type <args> arg_list
 %type <slist> stmt_list default_block_opt
 %type <cases> case_blocks
+%type <plist> param_list param_list_opt
 
 %%
 translation_unit
@@ -51,13 +53,36 @@ translation_unit
   ;
 
 function
-  : T_INT T_ID '(' ')' compound_stmt
+  : T_INT T_ID '(' param_list_opt ')' compound_stmt
     {
       auto fn = std::make_unique<Function>();
       fn->name = std::string($2);
       free($2);
-      fn->bodyBlock.reset(static_cast<BlockStmt*>($5));
+      if ($4) {
+        for (const auto& p : *$4) fn->detailedParams.push_back(p);
+        delete $4;
+      }
+      fn->bodyBlock.reset(static_cast<BlockStmt*>($6));
       g_resultFunction = std::move(fn);
+    }
+  ;
+
+param_list_opt
+  : param_list { $$ = $1; }
+  | /* empty */ { $$ = nullptr; }
+  ;
+
+param_list
+  : T_INT T_ID
+    {
+      $$ = new std::vector<FunctionParam>();
+      FunctionParam p; p.name = std::string($2); p.type = Type::Int(); free($2);
+      $$->push_back(p);
+    }
+  | param_list ',' T_INT T_ID
+    {
+      FunctionParam p; p.name = std::string($4); p.type = Type::Int(); free($4);
+      $1->push_back(p); $$ = $1;
     }
   ;
 

@@ -443,6 +443,19 @@ void IRGenerator::emitBlock(const BlockStmt* blk, FunctionContext& fn) {
     }
 }
 
+void IRGenerator::emitFunctionPrologue(const Function& fnNode, FunctionContext& fn) {
+    // Map parameters to allocas and store incoming values
+    for (size_t i = 0; i < fnNode.detailedParams.size(); ++i) {
+        const auto& p = fnNode.detailedParams[i];
+        std::string a = newTemp(fn);
+        fn.entryAllocas.push_back("  " + a + " = alloca i32\n");
+        fn.locals[p.name] = a;
+        // Get LLVM argument name: %0, %1, ...
+        std::string arg = "%" + std::to_string(i);
+        fn.body << "  store i32 " << arg << ", i32* " << a << "\n";
+    }
+}
+
 std::string IRGenerator::getOrCreateLabel(FunctionContext& fn, const std::string& userLabel) {
     auto it = fn.labelMap.find(userLabel);
     if (it != fn.labelMap.end()) return it->second;
@@ -461,13 +474,19 @@ std::string IRGenerator::generateModuleIR(const Function& fn) {
     out << "; ModuleID = 'my_compiler'\n";
     out << "source_filename = \"my_compiler\"\n\n";
 
-    // Function signature (assume i32 () for now)
-    out << "define i32 @" << fn.name << "() {\n";
+    // Function signature: i32 with i32 params
+    out << "define i32 @" << fn.name << "(";
+    for (size_t i=0;i<fn.detailedParams.size();++i) {
+        if (i) out << ", ";
+        out << "i32 %" << i;
+    }
+    out << ") {\n";
 
     // Prologue
     ensureBlock(ctx);
 
     // Emit entry allocas later
+    emitFunctionPrologue(fn, ctx);
     // Body
     if (fn.bodyBlock) {
         emitBlock(fn.bodyBlock.get(), ctx);
