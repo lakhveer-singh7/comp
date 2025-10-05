@@ -1,0 +1,6 @@
+;; CHECK:icmp slt i32
+;; CHECK:icmp sgt i32
+;; CHECK:icmp eq i32
+;; CHECK:zext i1
+;; CHECK:select i1
+;; CHECK:ret i32
