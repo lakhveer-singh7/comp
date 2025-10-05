@@ -22,6 +22,8 @@ std::unique_ptr<Function> g_resultFunction;
   Stmt* stmt;
   BlockStmt* block;
   std::vector<Expr*>* args;
+  std::vector<Stmt*>* slist;
+  std::vector<SwitchCase>* cases;
 }
 
 %token T_INT T_CHAR T_VOID T_STRUCT T_TYPEDEF T_STATIC
@@ -37,9 +39,11 @@ std::unique_ptr<Function> g_resultFunction;
 %left '+' '-'
 %left '*' '/' '%'
 %right UMINUS '!' '~'
-%type <expr> expr assignment logical_or logical_and equality relational additive multiplicative unary postfix primary
-%type <stmt> stmt expr_stmt selection_stmt iteration_stmt jump_stmt compound_stmt
+%type <expr> expr assignment logical_or logical_and equality relational additive multiplicative unary postfix primary opt_expr
+%type <stmt> stmt expr_stmt selection_stmt iteration_stmt jump_stmt compound_stmt declaration label_stmt switch_stmt
 %type <args> arg_list
+%type <slist> stmt_list default_block_opt
+%type <cases> case_blocks
 
 %%
 translation_unit
@@ -84,6 +88,8 @@ stmt
   | iteration_stmt
   | jump_stmt
   | compound_stmt
+  | declaration
+  | label_stmt
   ;
 
 expr_stmt
@@ -124,6 +130,81 @@ iteration_stmt
       node->condition.reset($5);
       $$ = node;
     }
+  ;
+
+  | T_FOR '(' opt_expr ';' opt_expr ';' opt_expr ')' stmt
+    {
+      auto fs = new ForStmt();
+      if ($3) fs->init.reset(new ExprStmt(std::unique_ptr<Expr>($3)));
+      if ($5) fs->condition.reset($5);
+      if ($7) fs->iter.reset(new ExprStmt(std::unique_ptr<Expr>($7)));
+      fs->body.reset($9);
+      $$ = fs;
+    }
+  ;
+opt_expr
+  : expr { $$ = $1; }
+  | /* empty */ { $$ = nullptr; }
+  ;
+
+label_stmt
+  : T_ID ':' stmt
+    {
+      auto blk = new BlockStmt();
+      auto lab = new LabelStmt(); lab->label = std::string($1); free($1);
+      blk->statements.emplace_back(lab);
+      blk->statements.emplace_back($3);
+      $$ = blk;
+    }
+  ;
+
+declaration
+  : T_STATIC T_INT T_ID ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = true; d->name = std::string($3); free($3); d->type = Type::Int(); $$ = d;
+    }
+  | T_INT T_ID ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::Int(); $$ = d;
+    }
+  | T_INT T_ID '=' expr ';'
+    {
+      auto d = new VarDeclStmt(); d->isStatic = false; d->name = std::string($2); free($2); d->type = Type::Int(); d->init.reset($4); $$ = d;
+    }
+  ;
+
+switch_stmt
+  : T_SWITCH '(' expr ')' '{' case_blocks default_block_opt '}'
+    {
+      auto sw = new SwitchStmt(); sw->value.reset($3);
+      for (auto &c : *$6) sw->cases.push_back(c);
+      delete $6;
+      for (auto *s : *$7) sw->defaultBody.emplace_back(s);
+      delete $7;
+      $$ = sw;
+    }
+  ;
+
+case_blocks
+  : case_blocks T_CASE T_NUM ':' stmt_list
+    {
+      $$ = $1;
+      SwitchCase c; c.value = $3; for (auto* s : *$5) c.statements.emplace_back(s); delete $5; $$.push_back(std::move(c));
+    }
+  | /* empty */
+    {
+      $$ = new std::vector<SwitchCase>();
+    }
+  ;
+
+stmt_list
+  : stmt_list stmt { $1->push_back($2); $$ = $1; }
+  | /* empty */    { $$ = new std::vector<Stmt*>(); }
+  ;
+
+default_block_opt
+  : T_DEFAULT ':' stmt_list { $$ = $3; }
+  | /* empty */             { $$ = new std::vector<Stmt*>(); }
   ;
 
 jump_stmt
