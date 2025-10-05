@@ -22,6 +22,7 @@ ws         [ \t\r\f\v]
 {ws}+                  ;
 \n                     ;
 "int"                  return T_INT;
+"float"                return T_FLOAT;
 "return"               return T_RETURN;
 "char"                 return T_CHAR;
 "void"                 return T_VOID;

@@ -5,6 +5,7 @@
 enum class TypeKind {
     Int,
     Char,
+    Float,
     Void,
     Pointer,
     Array,
@@ -24,6 +25,7 @@ struct Type {
 
     static Type* Int();
     static Type* Char();
+    static Type* Float();
     static Type* Void();
     static Type* PointerTo(Type* elem);
     static Type* ArrayOf(Type* elem, size_t len);
@@ -34,6 +36,7 @@ struct Type {
 // Simple global type singletons
 inline Type* Type::Int() { static Type t{TypeKind::Int}; return &t; }
 inline Type* Type::Char() { static Type t{TypeKind::Char}; return &t; }
+inline Type* Type::Float() { static Type t{TypeKind::Float}; return &t; }
 inline Type* Type::Void() { static Type t{TypeKind::Void}; return &t; }
 inline Type* Type::PointerTo(Type* elem) { static std::vector<Type> pool; pool.push_back(Type{TypeKind::Pointer}); pool.back().element = elem; return &pool.back(); }
 inline Type* Type::ArrayOf(Type* elem, size_t len) { static std::vector<Type> pool; pool.push_back(Type{TypeKind::Array}); pool.back().element = elem; pool.back().arrayLength = len; return &pool.back(); }
